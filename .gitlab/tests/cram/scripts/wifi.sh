@@ -1,0 +1,869 @@
+#
+# Common WiFi helpers:
+#
+
+# set/get wifi datamodel
+# In : path under 'Device.WiFi.'
+# Out : print ba-cli output
+wifi_dm() {
+  local path="$1"
+  local base_path="$2"
+  if [ -z "$base_path" ]; then
+    base_path="Device.WiFi."
+  fi
+  local tool="$3"
+  if [ -z "$tool" ]; then
+    tool="usp-cli"
+  fi
+  local protected="$4"
+
+  local obj_name
+  local res
+  local cli_pre_cmd=""
+
+  if [ "$protected" = "protected" ]; then
+    cli_pre_cmd="protected; "
+  fi
+
+  # read object name
+  # get str before a single = (ignoring ==) and extracts the string following the final dot,
+  # or defaults to the last dot segment if no = is present.
+  obj_name=$(printf '%s\n' "$path" | sed -E 's/([^=])=([^=]).*/\1/; s/.*\.//')
+
+  # remove any trailing '?' from next grep
+  obj_name=${obj_name%%\?*}
+  R logger -t cram "wifi_dm: command ${base_path}${path} object ${obj_name}"
+
+  # run the command
+  res=$(R "${tool} '${cli_pre_cmd}${base_path}${path}'" | grep -v '>')
+
+  if ! echo "$res" | grep -q "${obj_name}="; then
+    if echo "$res" | grep -q "No data found"; then
+      R logger -t cram "wifi_dm: ${base_path}${path} failed : No data found"
+      echo "No data found"
+      return 0
+    fi
+    R logger -t cram "wifi_dm: ${base_path}${path} failed."
+    echo "wifi_dm: ${base_path}${path} failed. Result:"
+    echo "$res"
+    return 1
+  else
+    echo "$res" | grep "${obj_name}=" | sed '/^$/d' | grep -v '>' | sort
+  fi
+
+  return 0
+}
+
+# set/get wifi datamodel based on band
+# In : band (2: 2.4GHz, 5: 5GHz, 6: 6GHz), path under 'WiFi.Radio.N.'
+# Out : print ba-cli output
+wifi_dm_radio_band() {
+  local band="$1"
+  local obj="$2"
+  local base_path="$3"
+  local tool="$4"
+
+  if [ -z "$obj" ]; then
+    R logger -t cram "wifi_dm_radio_band: empty object"
+    echo "wifi_dm_radio_band: empty object"
+    return 1
+  fi
+
+  if [ "$band" = "2" ]; then
+    rad_filter='[OperatingFrequencyBand=="2.4GHz"]'
+  elif [ "$band" = "5" ]; then
+   rad_filter='[OperatingFrequencyBand=="5GHz"]'
+  elif [ "$band" = "6" ]; then
+   rad_filter='[OperatingFrequencyBand=="6GHz"]'
+  else
+    R logger -t cram "wifi_dm_radio_band: unknown band: $band"
+    echo "wifi_dm_radio_band: unknown band: $band"
+    return 1
+  fi
+
+  wifi_dm "Radio.${rad_filter}.${obj}" "$base_path" "$tool"
+}
+
+# getEHTOperations helper with normalized output
+# In : band (2.4, 5, 6)
+# Out : sorted key=value lines from getEHTOperations()
+get_eht_ops() {
+  local band="$1"
+  local freq_band
+
+  if [ "$band" = "2.4" ] || [ "$band" = "2" ] || [ "$band" = "2.4GHz" ]; then
+    freq_band="2.4GHz"
+  elif [ "$band" = "5" ] || [ "$band" = "5GHz" ]; then
+    freq_band="5GHz"
+  elif [ "$band" = "6" ] || [ "$band" = "6GHz" ]; then
+    freq_band="6GHz"
+  else
+    R logger -t cram "get_eht_ops: unknown band: $band"
+    echo "get_eht_ops: unknown band: $band"
+    return 1
+  fi
+
+  R "usp-cli -l \"Device.WiFi.Radio.[OperatingFrequencyBand=='${freq_band}'].getEHTOperations()\"" |
+    awk '/^\[/ {f=1; next} /^\]/ {f=0} f' |
+    tr -d ' {}[],' |
+    sed '/^$/d' |
+    sort
+}
+
+# Enable AccessPoints
+# In : AccessPoint object index
+# Out : "enabled" if success, empty otherwise
+enable_ap() {
+  R "usp-cli -j -l Device.WiFi.AccessPoint.${1}.Enable=1 | grep -q Enable && echo 'Device.WiFi.AccessPoint.${1} enabled'"
+}
+
+# Disable AccessPoints
+# In : AccessPoint object index, statut (0/1) (Optional)
+# Out : AccessPoint.X.Enable=0,1 if success
+enable_ap_sync() {
+  local res
+  local ap=$1
+  local enable=$2
+  local timeout=${3:-15}
+
+  if [ $enable  -eq 0 ]; then
+    tgt_state='Status="Disabled"'
+  else
+    tgt_state='Status="Enabled"'
+  fi
+
+  if ! res=$(wifi_dm "AccessPoint.${ap}.Enable=$enable"); then
+    echo "$res"
+    echo "Could not enable AP $ap"
+    return 1
+  fi
+
+  while [ $timeout -gt 0 ]; do
+    wifi_dm "AccessPoint.${ap}.Status?0" | grep -q $tgt_state && break
+    timeout=$((timeout-1))
+    sleep 1
+  done
+
+  [ "$timeout" -gt 0 ] && echo "AccessPoint.${ap}.Enable=${enable}" || echo "AccessPoint.$ap enable=${enable} timed out"
+
+  # guard delay
+  sleep 1
+}
+
+# Disable AccessPoints
+# In : AccessPoint object index
+# Out : "disabled" if success, empty otherwise
+disable_ap() {
+  R "usp-cli -j -l Device.WiFi.AccessPoint.${1}.Enable=0 | grep -q Enable && echo 'Device.WiFi.AccessPoint.${1} disabled'"
+}
+
+# Wait until SSID status is Up/Down
+# In : AccessPoint object index
+# In : Expected status Up/Down
+# Out: "SSID Reference is {Up/Down}"
+check_ap_ref_ssid() {
+  R "
+    i=10
+    while [ \$i -gt 1 ]; do
+      usp-cli -j -l Device.WiFi.AccessPoint.${1}.SSIDReference+.Status? |
+        grep Device.WiFi.SSID. |
+        grep -q \"${2}\" &&
+        echo 'Device.WiFi.AccessPoint.${1} SSID Reference is ${2}' && break
+      i=\$(( i - 1 ))
+      sleep 2
+    done
+  "
+}
+
+# Print SSIDReference status
+# In : AccessPoint object index
+# Out : Enable / Disable / Dormant ...
+get_ssid_ref() {
+  msg=$(R "usp-cli -j -l Device.WiFi.AccessPoint.${1}.SSIDReference+.Status?")
+  echo "$msg" | sed '/^$/d'
+}
+
+# Print APs status
+get_ap_status() {
+  wifi_dm "AccessPoint.*.Status?0"
+}
+
+# Print APs status
+get_ap_ssid() {
+
+  R "usp-cli 'Device.WiFi.SSID.[Alias != \"ep2g0\" && Alias != \"ep5g0\" && Alias != \"ep6g0\"].SSID?0'" \
+      | sed '/^>/d;/^$/d' \
+      | LC_ALL=C sort -t. -k4,4n
+}
+
+# Print APs MLDUnit
+get_ap_mldunit() {
+  R "usp-cli 'Device.WiFi.SSID.[Alias != \"ep2g0\" && Alias != \"ep5g0\" && Alias != \"ep6g0\"].MLDUnit?0'" \
+      | sed '/^>/d;/^$/d' \
+      | LC_ALL=C sort -t. -k4,4n
+}
+
+# list wpacltrl socket file of a specific AP
+# In : AccessPoint object index
+# Out : local ls output
+ls_ap_hapd_socket () {
+  local ap=$1
+  local mld_unit
+  local main_itf
+  local link_id
+  local wpa_file
+
+  # read main link interface from pwhm dm
+  mld_unit=$(R "usp-cli -l \"Device.WiFi.AccessPoint.${ap}.SSIDReference+.MLDUnit?\"" | sed '/^$/d')
+  main_itf=$(R "usp-cli -l \"Device.WiFi.SSID.[MLDRole=='Primary' && MLDUnit==${mld_unit}].Name?\"" | sed '/^$/d')
+
+  # read link id from SSID object
+  link_id=$(R "usp-cli -l \"Device.WiFi.AccessPoint.${ap}.SSIDReference+.MLDLinkID?\"" | sed '/^$/d')
+
+  # ls socket file
+  wpa_file="/var/run/hostapd/${main_itf}_link${link_id}"
+#  /var/run/hostapd/wlan[0-9.]+_link[0-9] (re)
+  R "[ -e ${wpa_file} ] && ls ${wpa_file} || echo \"not found\""
+}
+
+
+# list all wpacltrl socket file of a specific AP
+# Out : local ls output
+ls_hapd_sockets () {
+  # ls socket file
+  wpa_file="/var/run/hostapd/wlan*_link*"
+#  /var/run/hostapd/wlan[0-9.]+_link[0-9] (re)
+  R "ls /var/run/hostapd/ | grep wlan" | sort
+}
+
+# Print SSIDs status
+get_ssid_status() {
+  R "usp-cli -j -l Device.WiFi.SSID.?0 | jsonfilter -e @[0]'[@.Alias != \"ep2g0\" && @.Alias != \"ep5g0\" && @.Alias != \"ep6g0\"].Status'" | LC_ALL=C sort
+}
+
+# Print SSIDs values
+get_ssid_ssid() {
+  R "usp-cli -j -l Device.WiFi.SSID.?0 | jsonfilter -e @[0]'[@.Alias != \"ep2g0\" && @.Alias != \"ep5g0\" && @.Alias != \"ep6g0\"].SSID'" | LC_ALL=C sort
+}
+
+# print the status of the accesspoints related to a given radio
+# In : Radio index
+# Out : the status of all the accespoint attached to the radio
+get_radio_ap_status() {
+  local rad=$1
+  rad_name=$(R "ba-cli -l WiFi.Radio.$rad.Name?" | sed '/^$/d')
+  R "ba-cli WiFi.AccessPoint.? | sed -n '/Alias=\"${rad_name}/,/\.Status=/ { /\.Status=/p }'"
+}
+
+# Set MLDUnit
+# In : AccessPoint object index, MLDUnit
+# Out : MLDUnit value set
+set_mlduint() {
+  R "usp-cli -l Device.WiFi.AccessPoint.$1.SSIDReference+.MLDUnit=$2"  | sed '/^$/d'
+}
+
+# Set Radio [Arg1] OperatingStandardsFormat = [Arg2]; Standard : list of all standards; Legacy : only highest enabled 802.11 standard
+set_radio_operating_standard_format(){
+  R "ba-cli -l -j \"WiFi.Radio.[OperatingFrequencyBand=='$1'].OperatingStandardsFormat='$2'\" | jsonfilter -e @[0]'[*].OperatingStandardsFormat'"
+}
+
+# Set Radio [Arg1] OperatingStandards = [Arg2];
+set_radio_operating_standards(){
+  R "usp-cli -l -j \"Device.WiFi.Radio.[OperatingFrequencyBand=='$1'].OperatingStandards='$2'\" | jsonfilter -e @[0]'[*].OperatingStandards'"
+}
+
+# read hostapd option from configuration file
+# Input : interface name, option
+# Output : echo option value if it exists else error message
+get_hapd_config() {
+  local target_iface="$1"
+  local target_param="$2"
+  local result
+  local target_conf_path="/tmp/${target_iface%.*}_hapd.conf"
+
+  # As when in MLO all relevant interface options are set to main link itf name, use the BSSID instead while parsing parameters
+  # this ensure the detection of the right section
+  target_bssid=$(R "usp-cli -l \"Device.WiFi.SSID.[Name=='$itf'].BSSID?\"" | sed '/^$/d' | awk '{print toupper($0)}')
+
+  R logger -t cram "get_hapd_config: get '$target_param' of '$target_iface' with bssid '$target_bssid' from '$target_conf_path'"
+
+  result=$(R "cat $target_conf_path" 2>/dev/null | awk -v t_if="$target_bssid" -v t_pa="$target_param" '
+      BEGIN { f_sec=0; f_val=0 }
+
+      # Detect start of a section (Primary interface or BSS)
+      /^bssid=/ || /^bss=/ {
+          split($0, a, "=");
+          current_if = a[2];
+          if (current_if == t_if) { f_sec=1 }
+          next
+      }
+
+      # If inside the correct section, look for the parameter
+      f_sec == 1 && current_if == t_if {
+          # Check for exact parameter match (start of line followed by =)
+          if ($0 ~ "^" t_pa "=") {
+              split($0, b, "=");
+              print b[2];
+              f_val=1;
+              exit;
+          }
+      }
+
+      END {
+          if (f_sec == 0) { print "ERR_SECTION_NOT_FOUND"; exit 1 }
+          if (f_val == 0) { print "ERR_OPTION_NOT_FOUND"; exit 1 }
+      }
+  ')
+
+  # Handle the output and exit codes
+  case "$result" in
+      "ERR_SECTION_NOT_FOUND")
+          R logger -t cram "get_hapd_config: Interface section not found"
+          echo "Interface section not found"
+          return 0
+          ;;
+      "ERR_OPTION_NOT_FOUND")
+          R logger -t cram "get_hapd_config: Option '$target_param' not found"
+          echo "Option '$target_param' not found"
+          return 0
+          ;;
+      *)
+          R logger -t cram "get_hapd_config: $target_param='$result'"
+          echo "$result"
+          return 0
+          ;;
+  esac
+}
+#
+# APMLD helpers
+#
+
+# Print MLDUnit of private MLD based on default SSID (prplOS)
+# In : N/A
+# Out : MLDUNit
+get_private_mldunit() {
+   R 'usp-cli -j -l "Device.WiFi.SSID.[SSID==\"prplOS\"].MLDUnit?" | jsonfilter -e @[0]'[*].MLDUnit''  | head -n 1
+}
+
+# Set MLDUnit of private MLD based on SSID
+# In : SSID
+# In : MLDUnit
+# Out : N/A
+set_ssid_mldunit() {
+   R "usp-cli -j -l 'Device.WiFi.SSID.[SSID==\"${1}\"].MLDUnit=${2}' | jsonfilter -e @[0]'[*].MLDUnit'"
+}
+
+# Print MLDUnit of private MLD based on default SSID (prplOS-guest)
+# In : N/A
+# Out : MLDUnit
+get_guest_mldunit() {
+   R 'usp-cli -j -l "Device.WiFi.SSID.[SSID==\"prplOS-guest\"].MLDUnit?" | jsonfilter -e @[0]'[*].MLDUnit''  | head -n 1
+}
+
+# validate mac address
+is_valid_mac() {
+  printf '%s\n' "$1" | grep -Eq '^([0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}$'
+}
+
+# Print APMLD MACAddress
+# In : MLDID (MLDUnit)
+# Out : APMLD MACAddress. If an APMLD matches the MLDID with empty MACAddress return an error message
+get_apmld_mac_from_dm() {
+  mac=$(R "usp-cli -l -j 'Device.WiFi.APMLD.[MLDID == ${1}].MLDMACAddress?' | jsonfilter -e @[0]'[*].MLDMACAddress' | strings")
+  if ! is_valid_mac "$mac"; then
+    echo "not_found"
+    R logger -t cram "get_apmld_mac_from_dm: MLDMACAddress $mac of MLD ${1} not found"
+    #R "iw dev > /tmp/$(R date +'%Y_%m_%d_%H_%M_%S')_aplmd_iw_out.txt"
+  else
+    echo "$mac"
+  fi
+}
+
+# Print intefrace name from a MACAddress
+# In : wlan MAC address
+# Out : interface name
+get_interface_name() {
+  R "usp-cli -l -j 'Device.WiFi.SSID.[MACAddress==\"${1}\"].Name?' | jsonfilter -e @[0]'[*].Name' || echo 'Could not find SSID'"
+}
+
+# Print link number of an interface
+# In : wlan interface
+# Out : link number
+get_link_info() {
+  local itf=$1
+  R logger -t cram "get_link_info: interface ${1}"
+  R "iw dev ${itf} info" | grep -e addr -e channe -e link | sed 's/^[ \t]*//' | sed 's/:*$//' | sort | uniq
+}
+
+# print main link interface name from MAC address
+# In : interface MAC address
+# Out : main link interface name
+get_main_link_itf () {
+  local found=0
+  local ifaces
+  local mac=$1
+
+  ifaces=$(R usp-cli -l "Device.WiFi.SSID.*.Name?0 | strings")
+
+  for iface in $ifaces; do
+    info=$(R iw dev "$iface" info 2>/dev/null)
+    if echo "$info" | grep -i ${mac} -B2 | grep -q "link"; then
+      R logger -t cram "MAC $1 found in main link interface $iface"
+      echo "$iface"
+      found=1
+      break
+    fi
+  done
+
+  if [ "$found" -eq 0 ]; then
+    R logger -t cram "MAC $1 not associated to any main link"
+    echo "MAC $1 not associated to any main link"
+  fi
+}
+
+# print ifindex of a specific AP
+# In : AP index
+# Out : ifindex
+get_ifindex () {
+  local ap_index=$1
+  ifname=$(wifi_dm "AccessPoint.${ap_index}.SSIDReference+.Name?" | cut -d'"' -f2)
+  R logger -t cram "get_ifindex: AccessPoint ${1} / interface $ifname"
+  R "iw dev ${ifname} info" | grep ifindex | sed 's/^[ \t]*//' | cut -d ' ' -f2
+}
+
+# Print sorted list of hostapd sockets inodes and pathes
+# In : no input
+# Out : list of hostapd sockets inodes and paths
+read_hostapd_inodes(){
+  ilist=$(R "ls -li /var/run/hostapd/wlan* 2>/dev/null" | awk '{print $1, $NF}' | sort -n)
+  echo "$ilist"
+}
+
+# print lines difference (diff command equivalent)
+# In : old string, new string
+# Out : lines differences with A:/R: prefix (Added/Removed)
+compare_list() {
+  awk -v l1="$1" -v l2="$2" '
+    function trim(s) { gsub(/^[ \t\r]+|[ \t\r]+$/, "", s); return s }
+    BEGIN {
+      n1 = split(l1, a, "\n")
+      n2 = split(l2, b, "\n")
+
+      for (i=1; i<=n1; i++) if ((a[i]=trim(a[i])) != "") s1[a[i]]
+      for (i=1; i<=n2; i++) if ((b[i]=trim(b[i])) != "") s2[b[i]]
+
+      for (i=1; i<=n1; i++) if (a[i] != "" && !(a[i] in s2)) print "R: " a[i]
+      for (i=1; i<=n2; i++) if (b[i] != "" && !(b[i] in s1)) print "A: " b[i]
+    }'
+}
+
+# compare ifindex of specific AP
+# In : AP index, old ifindex list
+# Out : OK / error message
+check_ifindexes () {
+  while [ "$#" -ge 2 ]; do
+    ap_index=$1
+    tgt_ifindex=$2
+
+    current_ifindex=$(get_ifindex "${ap_index}")
+
+    if [ "${current_ifindex}" = "${tgt_ifindex}" ]; then
+      echo "OK"
+    else
+      echo "AP${ap_index}: NOK (got ${current_ifindex}, expected ${tgt_ifindex})"
+    fi
+
+    shift 2
+  done
+}
+
+# print link number from iw output
+# In : APMLD index (ie MLDID)
+# Out : link number from iw output
+iw_affliated_link_info_from_mldid() {
+  # Detect main link interface
+  mac_address=$(get_apmld_mac_from_dm "$1")
+  if [ -z "$mac_address" ]; then
+    R logger -t cram "iw_affliated_link_info_from_mldid: empty mac_address !"
+  else
+    R logger -t cram "iw_affliated_link_info_from_mldid: mac_address = $mac_address"
+    itf_name=$(get_main_link_itf "$mac_address")
+    get_link_info "$itf_name"
+  fi
+}
+
+# print MAC addresses list of link interfaces from iw  output
+# In : main link interface name
+# Out : LinkID and MAC addresses list of affiliated interfaces (format : link N addr xx:xx:xx:xx:xx)
+iw_get_main_link_mac_list() {
+  local iface=$1
+  R logger -t cram "get_main_link_mac_list $iface"
+  R "iw dev $iface info"  | grep link -A3 | grep -e 'addr ' -e link | sed -nE 'N;s/.*link ([0-9]+):\n[[:space:]]*addr ([0-9a-fA-F:]+)/link \1 addr \2/p'  | LC_ALL=C sort
+}
+
+# print MAC addresses list of link interfaces from iw  output
+# In : MLDID
+# Out : MAC addresses list of link interfaces
+iw_affilated_mac_list_from_mldid() {
+  # Detect main link interface
+  mac_address=$(get_apmld_mac_from_dm "$1") && R logger -t cram "mac_address = $mac_address"
+  if [ -z "$mac_address" ]; then
+    R logger -t cram "iw_affliated_mac_from_mldid: empty mac_address !"
+  else
+    itf_name=$(get_main_link_itf "$mac_address")
+    iw_get_main_link_mac_list "$itf_name"
+  fi
+}
+
+# print MAC addresses list of link interfaces from WiFi DM
+# In : MLDID
+# Out : LinkID and MAC addresses list of affiliated interfaces (format : link N addr xx:xx:xx:xx:xx)
+dm_affilated_mac_list_from_mldid() {
+  local output=""
+  local idx=1
+  local mld_id="$1"
+  local aff_ap_nb
+  local bssid
+  local link_id
+
+  aff_ap_nb=$(R "usp-cli -l 'Device.WiFi.APMLD.[ MLDID == ${mld_id} ].AffiliatedAPNumberOfEntries?'" | sed '/^$/d')
+
+  while [ "$idx" -le "$aff_ap_nb" ]; do
+    bssid=$(R "usp-cli -j -l 'Device.WiFi.APMLD.[ MLDID == ${mld_id} ].AffiliatedAP.${idx}.BSSID?' | jsonfilter -e @[0]'[*].BSSID'")
+    link_id=$(R "usp-cli -j -l 'Device.WiFi.APMLD.[ MLDID == ${mld_id} ].AffiliatedAP.${idx}.LinkID?' | jsonfilter -e @[0]'[*].LinkID'")
+    output="link ${link_id} addr ${bssid}\n${output}"
+    idx=$((idx + 1))
+  done
+
+  printf "%b" "$output"
+}
+
+
+# Get current PowerType for the given radio index
+# Usage: dm_radio_powertype_get <radio_index>
+dm_radio_powertype_get() {
+  local radio_idx="${1:?Usage: dm_radio_powertype_get <radio_index>}"
+  R "ba-cli -j -l Device.WiFi.Radio.${radio_idx}.PowerType? | jsonfilter -e @[0]'[*].PowerType'" | sed '/^$/d'
+}
+
+# Set PowerType for the given radio index (e.g. VeryLowPower, Indoor, StandardPower)
+# Usage: dm_radio_powertype_set <radio_index> <PowerType>
+dm_radio_powertype_set() {
+  local radio_idx="${1:?Usage: dm_radio_powertype_set <radio_index> <VeryLowPower|Indoor|StandardPower>}"
+  local power_type="${2:?Usage: dm_radio_powertype_set <radio_index> <VeryLowPower|Indoor|StandardPower>}"
+  R "ba-cli -j -l Device.WiFi.Radio.${radio_idx}.PowerType=${power_type} | jsonfilter -e @[0]'[*].PowerType'" | sed '/^$/d'
+}
+
+# Get RegulatoryDomain (country code) for all radios
+# Usage: dm_radio_regulatory_domain_get
+dm_radio_regulatory_domain_get() {
+  R "ba-cli -j -l Device.WiFi.Radio.*.RegulatoryDomain? | jsonfilter -e @[0]'[*].RegulatoryDomain'" | sed '/^$/d'
+}
+
+# Set RegulatoryDomain (country code) for all radios
+# Usage: dm_radio_regulatory_domain_set <country_code>
+dm_radio_regulatory_domain_set() {
+  local country="${1:?Usage: dm_radio_regulatory_domain_set <country_code>}"
+  R "ba-cli -j -l Device.WiFi.Radio.*.RegulatoryDomain=${country} | jsonfilter -e @[0]'[*].RegulatoryDomain'" | sed '/^$/d'
+}
+
+#
+# Start prplMesh
+#
+prplmesh_start() {
+  R logger -t cram "Start prplMesh"
+  local ret=$(R "ba-cli X_PRPLWARE-COM_ProcessManager.PrplMesh.Enable=1 | grep -v '>' | grep 'Enable='")
+  check_output  echo $ret -- \
+    X_PRPLWARE-COM_ProcessManager.PrplMesh.Enable=1
+  R "amx_poll_object ubus X_PRPLWARE-COM_WiFiController.Network.Device.1. 60"
+  # protection delay. The DM availabilty can't ensure that prplmesh is yet in stable state
+  sleep 5
+}
+
+#
+# Stop prplMesh
+#
+prplmesh_stop() {
+  R logger -t cram "Stop prplMesh"
+  local ret=$(R "ba-cli X_PRPLWARE-COM_ProcessManager.PrplMesh.Enable=0 | grep -v '>' | grep 'Enable='")
+  check_output  echo $ret -- \
+    X_PRPLWARE-COM_ProcessManager.PrplMesh.Enable=0
+  # protection delay
+  sleep 5
+}
+
+#
+################ Testbed configuration helpers ##################
+#
+
+# Check command output against expected lines
+# In  : command, followed by "--", then expected output regex lines
+# Out : line-by-line differences for unexpected output
+check_output() {
+    cmd_args=""
+    expected_args=""
+    is_expected=0
+
+    for arg in "$@"; do
+        if [ "$arg" = "--" ]; then
+            is_expected=1
+            continue
+        fi
+
+        if [ "$is_expected" -eq 0 ]; then
+            if [ -z "$cmd_args" ]; then
+                cmd_args="$arg"
+            else
+                cmd_args="$cmd_args '$arg'"
+            fi
+        else
+            if [ -z "$expected_args" ]; then
+                expected_args="$arg"
+            else
+                expected_args="$expected_args
+$arg"
+            fi
+        fi
+    done
+
+    if [ -z "$expected_args" ] && type "$cmd_args" >/dev/null 2>&1; then
+        "$cmd_args"
+        return $?
+    fi
+
+    # Strip carriage returns and normalize actual output
+    actual=$(eval "$cmd_args" | tr -d '\r')
+
+    diff_output=""
+    i=1
+    
+    actual_count=$(printf '%s\n' "$actual" | grep -c '^')
+    expected_count=$(printf '%s\n' "$expected_args" | grep -c '^')
+    max=$(( actual_count > expected_count ? actual_count : expected_count ))
+
+    while [ "$i" -le "$max" ]; do
+        exp_line=$(printf '%s\n' "$expected_args" | sed -n "${i}p")
+        act_line=$(printf '%s\n' "$actual" | sed -n "${i}p")
+        
+        [ -z "$exp_line" ] && exp_line="(no expected line)"
+        [ -z "$act_line" ] && act_line="(no actual line)"
+
+        # Clean trailing $ if used as a regex anchor in Cram blocks
+        clean_exp_line=$(printf '%s' "$exp_line" | sed 's/\$*$//')
+
+        if ! printf '%s\n' "$act_line" | grep -qE "^${clean_exp_line}$"; then
+            diff_output="${diff_output}
+- ${exp_line}
++ ${act_line}"
+        fi
+        i=$((i + 1))
+    done
+
+    if [ -n "$diff_output" ]; then
+        echo ""
+        echo "[!] Not expected: $cmd_args"
+        echo "$diff_output"
+        echo ""
+        return 1
+    fi
+}
+
+# Check default vaps status
+#
+check_default_ap_status() {
+    # If check_output fails, print the wrapper context before returning 1
+    check_output get_ap_status -- \
+        'Device.WiFi.AccessPoint.1.Status="Disabled"' \
+        'Device.WiFi.AccessPoint.2.Status="Disabled"' \
+        'Device.WiFi.AccessPoint.3.Status="Disabled"' \
+        'Device.WiFi.AccessPoint.4.Status="Disabled"' \
+        'Device.WiFi.AccessPoint.5.Status="Disabled"' \
+        'Device.WiFi.AccessPoint.6.Status="Disabled"' \
+        'Device.WiFi.AccessPoint.7.Status="Disabled"' \
+        'Device.WiFi.AccessPoint.8.Status="Disabled"' \
+        'Device.WiFi.AccessPoint.9.Status="Disabled"'
+}
+
+# Check default SSIDs
+#
+check_default_ap_ssid() {
+    local vendor_output
+    vendor_output=$(wifi_dm "Radio.1.ChipsetVendor?" "WiFi." "ba-cli")
+
+    if echo "$vendor_output" | grep -q "Qualcomm"; then
+        check_output get_ap_ssid -- \
+            'Device.WiFi.SSID.1.SSID="prplOS"' \
+            'Device.WiFi.SSID.3.SSID="prplOS-guest"' \
+            'Device.WiFi.SSID.4.SSID="prplOS"' \
+            'Device.WiFi.SSID.6.SSID="prplOS-guest"' \
+            'Device.WiFi.SSID.7.SSID="prplOS"' \
+            'Device.WiFi.SSID.9.SSID="prplOS-guest"' \
+            'Device.WiFi.SSID.16.SSID="backhaul_(AC:91:9B|58:E4:03|10:E8:A7):[0-9A-F]{2}:[0-9A-F]{2}:[0-9A-F]{2}"' \
+            'Device.WiFi.SSID.17.SSID="backhaul_(AC:91:9B|58:E4:03|10:E8:A7):[0-9A-F]{2}:[0-9A-F]{2}:[0-9A-F]{2}"' \
+            'Device.WiFi.SSID.18.SSID="backhaul_(AC:91:9B|58:E4:03|10:E8:A7):[0-9A-F]{2}:[0-9A-F]{2}:[0-9A-F]{2}"'
+    elif echo "$vendor_output" | grep -qE "MaxLinear"; then
+        check_output get_ap_ssid -- \
+            'Device.WiFi.SSID.1.SSID="prplOS"' \
+            'Device.WiFi.SSID.3.SSID="prplOS"' \
+            'Device.WiFi.SSID.5.SSID="prplOS"' \
+            'Device.WiFi.SSID.7.SSID="prplOS-guest"' \
+            'Device.WiFi.SSID.8.SSID="prplOS-guest"' \
+            'Device.WiFi.SSID.9.SSID="prplOS-guest"' \
+            'Device.WiFi.SSID.17.SSID="backhaul_(4C:BA:7D|A8:C2:46|AC:9A:96):[0-9A-F]{2}:[0-9A-F]{2}:[0-9A-F]{2}"' \
+            'Device.WiFi.SSID.18.SSID="backhaul_(4C:BA:7D|A8:C2:46|AC:9A:96):[0-9A-F]{2}:[0-9A-F]{2}:[0-9A-F]{2}"' \
+            'Device.WiFi.SSID.19.SSID="backhaul_(4C:BA:7D|A8:C2:46|AC:9A:96):[0-9A-F]{2}:[0-9A-F]{2}:[0-9A-F]{2}"'
+    else
+        echo "check_default_ap_ssid: unknown platform"
+        R logger -t cram "check_default_ap_ssid: unknown platform ${vendor_output}"
+    fi
+}
+
+# Check default vaps MLDUnits
+# Out : empty if success
+check_default_ap_mldunit() {
+    local vendor_output
+    vendor_output=$(wifi_dm "Radio.1.ChipsetVendor?" "WiFi." "ba-cli")
+
+    if echo "$vendor_output" | grep -q "Qualcomm"; then
+      check_output get_ap_mldunit -- \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=0' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=1' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=0' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=1' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=0' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=1' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=2' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=2' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=2'
+    elif echo "$vendor_output" | grep -qE "MaxLinear"; then
+      # Actually MLDUnits are not set on OSPv2
+      check_output get_ap_mldunit -- \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=-1' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=-1' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=-1' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=-1' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=-1' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=-1' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=-1' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=-1' \
+        'Device.WiFi.SSID.[0-9]+.MLDUnit=-1'
+    else
+        echo "check_default_ap_mldunit: unknown platform"
+        R logger -t cram "check_default_ap_mldunit: unknown platform ${vendor_output}"
+    fi
+}
+
+# Set default vaps MLDUnits
+# Out : empty if success
+set_default_ap_mldunit() {
+
+  R logger -t cram "set_default_ap_mldunit: Restore default MLD configuration"
+
+  local vendor_output
+  vendor_output=$(wifi_dm "Radio.1.ChipsetVendor?" "WiFi." "ba-cli")
+
+  R logger -t cram "set_default_ap_mldunit: platform ${vendor_output}"
+
+  if echo "$vendor_output" | grep -q "Qualcomm"; then
+    check_output R 'ba-cli -l Device.WiFi.AccessPoint.1.SSIDReference+.MLDUnit=0  | sed '/^$/d'' -- \
+      '0'
+    check_output R 'ba-cli -l Device.WiFi.AccessPoint.2.SSIDReference+.MLDUnit=1  | sed '/^$/d'' -- \
+      '1'
+    check_output R 'ba-cli -l Device.WiFi.AccessPoint.3.SSIDReference+.MLDUnit=0  | sed '/^$/d'' -- \
+      '0'
+    check_output R 'ba-cli -l Device.WiFi.AccessPoint.4.SSIDReference+.MLDUnit=1  | sed '/^$/d'' -- \
+      '1'
+    check_output R 'ba-cli -l Device.WiFi.AccessPoint.5.SSIDReference+.MLDUnit=0  | sed '/^$/d'' -- \
+      '0'
+    check_output R 'ba-cli -l Device.WiFi.AccessPoint.6.SSIDReference+.MLDUnit=1  | sed '/^$/d'' -- \
+      '1'
+    check_output R 'ba-cli -l Device.WiFi.AccessPoint.7.SSIDReference+.MLDUnit=2  | sed '/^$/d'' -- \
+      '2'
+    check_output R 'ba-cli -l Device.WiFi.AccessPoint.8.SSIDReference+.MLDUnit=2  | sed '/^$/d'' -- \
+      '2'
+    check_output R 'ba-cli -l Device.WiFi.AccessPoint.9.SSIDReference+.MLDUnit=2  | sed '/^$/d'' -- \
+      '2'
+  elif echo "$vendor_output" | grep -qE "MaxLinear"; then
+    # Actually MLDUnits are not set on OSPv2
+    R logger -t cram "set_default_ap_mldunit: MLDUnits are not set on OSPv2"
+  else
+      echo "set_default_ap_mldunit: unknown platform ${vendor_output}"
+      R logger -t cram "set_default_ap_mldunit: unknown platform ${vendor_output}"
+  fi
+}
+
+# check default wifi configuration
+# Out : empty if success
+check_wifi_defaults() {
+  # Wait for Device.WiFi. datamodel availability:
+  R "amx_poll_object usp Device.WiFi. 60"
+
+  #########################################
+  #  Check default configuration
+  #########################################
+
+  local failed=0
+
+  # Check default vaps status
+  check_default_ap_status || { echo "ERROR: check_default_ap_status failed"; failed=1; }
+
+  # Check default ssid status
+  check_default_ap_ssid || { echo "ERROR: check_default_ap_ssid failed"; failed=1; }
+
+  # Check default MLDUnits
+  check_default_ap_mldunit || { echo "ERROR: check_default_ap_mldunit failed"; failed=1; }
+
+  # Check that no hostapd instance is running:
+  check_output R "pgrep -f '[h]ostapd' || echo 'not running'" -- \
+    'not running' || { echo "ERROR: hostapd check failed"; failed=1; }
+
+  # Check that prplmesh is running in gateway mode
+  check_output R "ba-cli -l X_PRPLWARE-COM_ProcessManager.PrplMesh.ManagementMode?  | sed '/^$/d'"  -- \
+    'Multi-AP-Controller-and-Agent' || { echo "ERROR: prplmesh management mode check failed"; failed=1; }
+
+  if [ "$failed" -ne 0 ]; then
+      R logger -t cram "check_wifi_defaults: failed"
+      echo " "
+      echo "#"
+      echo "# WARNING: check_wifi_defaults failed !"
+      echo "#"
+  fi
+}
+
+# set default testbed configuration
+# Out : empty if success
+testbed_set_wifi_defaults() {
+
+  # Wait for Device.WiFi. datamodel availability:
+  R "amx_poll_object usp Device.WiFi. 60"
+
+  # Set AutoChannelEnable=0 on all Device.WiFi.Radio. interfaces:
+  check_output wifi_dm "Radio.*.AutoChannelEnable=0" -- \
+    'Device.WiFi.Radio.1.AutoChannelEnable=0' \
+    'Device.WiFi.Radio.2.AutoChannelEnable=0' \
+    'Device.WiFi.Radio.3.AutoChannelEnable=0'
+
+  # Set 2.4GHz radio channel to 1
+  check_output wifi_dm "Radio.[OperatingFrequencyBand==\"2.4GHz\"].Channel=1" -- \
+    'Device.WiFi.Radio.1.Channel=1'
+
+  # Set 5GHz radio channel to 36 (non DFS)
+  check_output wifi_dm "Radio.[OperatingFrequencyBand==\"5GHz\"].Channel=36" -- \
+    'Device.WiFi.Radio.2.Channel=36'
+
+  # Set 6GHz radio channel to 37
+  check_output wifi_dm "Radio.[OperatingFrequencyBand==\"6GHz\"].Channel=37" -- \
+    'Device.WiFi.Radio.3.Channel=37'
+
+  # Set default MLDUnitSetting
+  check_output wifi_dm "Radio.*.IEEE80211be.MLDUnitSetting='Required'" "WiFi." "ba-cli" "protected" -- \
+    'WiFi.Radio.1.IEEE80211be.MLDUnitSetting="Required"' \
+    'WiFi.Radio.2.IEEE80211be.MLDUnitSetting="Required"' \
+    'WiFi.Radio.3.IEEE80211be.MLDUnitSetting="Required"'
+
+  # Reduce MLReconfigurationCount to 5 (default: 12) to prevent intermittent VAP toggling during fast deactivation
+  check_output wifi_dm "Radio.*.X_PRPLWARE-COM_IEEE80211be.MLReconfigurationCount=5" "Device.WiFi." "ba-cli" protected -- \
+    'Device.WiFi.Radio.1.X_PRPLWARE-COM_IEEE80211be.MLReconfigurationCount=5' \
+    'Device.WiFi.Radio.2.X_PRPLWARE-COM_IEEE80211be.MLReconfigurationCount=5' \
+    'Device.WiFi.Radio.3.X_PRPLWARE-COM_IEEE80211be.MLReconfigurationCount=5'
+}

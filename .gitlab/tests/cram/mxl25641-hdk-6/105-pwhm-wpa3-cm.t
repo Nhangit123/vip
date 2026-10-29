@@ -1,0 +1,205 @@
+Create R alias:
+
+  $ alias R="${CRAM_REMOTE_COMMAND:-}"
+  $ . "${TESTDIR}/../scripts/wifi.sh"
+
+  $ R logger -t cram "Starting $TESTFILE"
+
+  $ R "amx_wait_for Device.WiFi.Radio."
+
+  $ check_wifi_defaults
+  $ testbed_set_wifi_defaults
+
+  $ prplmesh_stop
+
+Provisory: update Security.ModesAvailable as required by PPM-3660; waiting for PCF-2259 to add WPA3-CM to 6GHz VAPs
+
+  $ R "ba-cli  \"WiFi.AccessPoint.[RadioReference == 'Device.WiFi.Radio.3'].Security.ModesAvailable='WPA3-Personal,WPA3-Personal-Compatibility,OWE'\"" | grep 'ModesAvailable=' | sed '/^$/d' | grep -Ev '^(>|$)'
+  WiFi.AccessPoint.\d+.Security.ModesAvailable="WPA3-Personal,WPA3-Personal-Compatibility,OWE" (re)
+  WiFi.AccessPoint.\d+.Security.ModesAvailable="WPA3-Personal,WPA3-Personal-Compatibility,OWE" (re)
+  WiFi.AccessPoint.\d+.Security.ModesAvailable="WPA3-Personal,WPA3-Personal-Compatibility,OWE" (re)
+
+Silently disable MLO:
+
+  $ R logger -t cram "Disable MLO"
+  $ R "usp-cli Device.WiFi.SSID.*.MLDUnit=-1 > /dev/null"
+
+Additionally, disable 11be to test absence of RSNOverride2 in 2.4/5 GHz:
+
+  $ set_radio_operating_standard_format '2.4GHz' 'Legacy'
+  Legacy
+
+  $ set_radio_operating_standards '2.4GHz' 'ax'
+  ax
+
+  $ set_radio_operating_standard_format '5GHz' 'Legacy'
+  Legacy
+
+  $ set_radio_operating_standards '5GHz' 'ax'
+  ax
+
+Check all 9 VAPs contain WPA3-Personal-Compatibility in the Security.ModesAvailable list:
+
+  $ R "usp-cli Device.WiFi.AccessPoint.*.Security.X_PRPLWARE-COM_ModesAvailable? | grep WPA3-Personal-Compatibility | wc -l"
+  9
+
+Enable private vaps:
+
+  $ R logger -t cram "Enable private vaps"
+  $ enable_ap 1
+  Device.WiFi.AccessPoint.1 enabled
+
+  $ enable_ap 2
+  Device.WiFi.AccessPoint.2 enabled
+
+  $ enable_ap 3
+  Device.WiFi.AccessPoint.3 enabled
+
+  $ sleep 10
+
+Check that 3 SSID instances are operating:
+
+  $ check_ap_ref_ssid 1 Up
+  Device.WiFi.AccessPoint.1 SSID Reference is Up
+
+  $ check_ap_ref_ssid 2 Up
+  Device.WiFi.AccessPoint.2 SSID Reference is Up
+
+  $ check_ap_ref_ssid 3 Up
+  Device.WiFi.AccessPoint.3 SSID Reference is Up
+
+Check wpa_key_mgmt is configured for WPA3-Transition in 5GHz hostapd.conf and rsn override params are absent:
+
+  $ itf=$(R "usp-cli -l Device.WiFi.AccessPoint.1.SSIDReference+.Name?" | sed '/^$/d')
+  $ get_hapd_config $itf wpa_key_mgmt
+  WPA-PSK SAE
+
+  $ get_hapd_config $itf rsn_override_key_mgmt
+  Option 'rsn_override_key_mgmt' not found
+
+Check wpa_key_mgmt is configured for WPA3 in 6GHz hostapd.conf and rsn override params are absent:
+
+  $ itf=$(R "usp-cli -l Device.WiFi.AccessPoint.3.SSIDReference+.Name?" | sed '/^$/d')
+  $ get_hapd_config $itf wpa_key_mgmt
+  .*\bSAE\b.* (re)
+
+  $ get_hapd_config $itf rsn_override_key_mgmt
+  Option 'rsn_override_key_mgmt' not found
+
+Set WPA3-Personal-Compatibility and search for one rsn override parameter in hostapd.conf
+The functional test here is: Controller is able to read WPA3-Personal-Compatibility from pwhm; Agent receives WPA3-Personal-Compatibility from Controller:
+
+  $ R logger -t cram "Set WPA3-Personal-Compatibility"
+  $ R "usp-cli -l -j \"Device.WiFi.AccessPoint.[Enable == 1].Security.ModeEnabled='WPA3-Personal-Compatibility'\" | jsonfilter -e @[0]'[*].ModeEnabled'"
+  WPA3-Personal-Compatibility
+  WPA3-Personal-Compatibility
+  WPA3-Personal-Compatibility
+
+  $ sleep 10
+
+Agent did not overwrite the AccessPoint.Security.ModeEnabled in pwhm:
+
+  $ R "usp-cli -j -l Device.WiFi.AccessPoint.[Enable==1].Security.ModeEnabled? | jsonfilter -e @[0]'[@].ModeEnabled'"
+  WPA3-Personal-Compatibility
+  WPA3-Personal-Compatibility
+  WPA3-Personal-Compatibility
+
+We only test 2.4/5GHz for RSN Override 1 parameters; RSN Override 1 is not broadcasted by 6GHz:
+
+  $ itf=$(R "usp-cli -l Device.WiFi.AccessPoint.1.SSIDReference+.Name?" | sed '/^$/d')
+  $ get_hapd_config $itf rsn_override_key_mgmt
+  SAE
+
+  $ itf=$(R "usp-cli -l Device.WiFi.AccessPoint.2.SSIDReference+.Name?" | sed '/^$/d')
+  $ get_hapd_config $itf rsn_override_key_mgmt
+  SAE
+
+Check RSN Override 2 parameters are absent in hostapd.conf (we disabled MLO and implicitly 11BE):
+
+  $ itf=$(R "usp-cli -l Device.WiFi.AccessPoint.1.SSIDReference+.Name?" | sed '/^$/d')
+  $ get_hapd_config $itf rsn_override_key_mgmt_2
+  Option 'rsn_override_key_mgmt_2' not found
+
+  $ itf=$(R "usp-cli -l Device.WiFi.AccessPoint.2.SSIDReference+.Name?" | sed '/^$/d')
+  $ get_hapd_config $itf rsn_override_key_mgmt_2
+  Option 'rsn_override_key_mgmt_2' not found
+
+Additionally, restore 11be to test absence of RSNOverride2 in 2.4/5 GHz:
+
+  $ set_radio_operating_standard_format '2.4GHz' 'Standard'
+  Standard
+
+  $ set_radio_operating_standards '2.4GHz' 'b,g,n,ax,be'
+  b,g,n,ax,be
+
+  $ set_radio_operating_standard_format '5GHz' 'Standard'
+  Standard
+
+  $ set_radio_operating_standards '5GHz' 'a,n,ac,ax,be'
+  a,n,ac,ax,be
+
+  $ sleep 10
+
+Check RSNO2 parameter was added to 5GHz hostapd conf file:
+
+  $ itf=$(R "usp-cli -l Device.WiFi.AccessPoint.1.SSIDReference+.Name?" | sed '/^$/d')
+  $ get_hapd_config $itf rsn_override_key_mgmt_2
+  .*\S.* (re)
+
+Check RSNO2 parameter was added to 6GHz hostapd conf file
+
+  $ itf=$(R "usp-cli -l Device.WiFi.AccessPoint.3.SSIDReference+.Name?" | sed '/^$/d')
+  $ get_hapd_config $itf rsn_override_key_mgmt_2
+  .*\S.* (re)
+
+Next, restore security modes in two steps: WPA3 Transition to 2.4GHz/5GHz, and WPA3 Personal to 6GHz
+
+  $ R "usp-cli -j -l Device.WiFi.AccessPoint.1.Security.ModeEnabled='WPA3-Personal-Transition' | jsonfilter -e @[0]'[@].ModeEnabled'"
+  WPA3-Personal-Transition
+
+  $ R "usp-cli -j -l Device.WiFi.AccessPoint.2.Security.ModeEnabled='WPA3-Personal-Transition' | jsonfilter -e @[0]'[@].ModeEnabled'"
+  WPA3-Personal-Transition
+
+  $ R "usp-cli -j -l Device.WiFi.AccessPoint.3.Security.ModeEnabled='WPA3-Personal' | jsonfilter -e @[0]'[@].ModeEnabled'"
+  WPA3-Personal
+
+  $ sleep 10
+
+Here the expected configuration is: One VAP Enabled on 2.4 / 5 GHz / 6GHz bands // Security.ModeEnabled=WPA3-Personal-Transition or WPA3-Personal
+
+Check 5GHz is broadcasting WPA3 Transition // at least WPA-PSK SAE // ignore 11BE/ AKM24
+
+  $ itf=$(R "usp-cli -l Device.WiFi.AccessPoint.1.SSIDReference+.Name?" | sed '/^$/d')
+  $ get_hapd_config $itf wpa_key_mgmt
+  (?=.*WPA-PSK)(?=.*SAE).* (re)
+
+Check 2.4GHz is broadcasting WPA3 Transition // at least WPA-PSK SAE // ignore 11BE/ AKM24
+
+  $ itf=$(R "usp-cli -l Device.WiFi.AccessPoint.2.SSIDReference+.Name?" | sed '/^$/d')
+  $ get_hapd_config $itf wpa_key_mgmt
+  (?=.*WPA-PSK)(?=.*SAE).* (re)
+
+Check 6GHz is broadcasting WPA3 // at least SAE // ignore 11BE/ AKM24:
+
+  $ itf=$(R "usp-cli -l Device.WiFi.AccessPoint.3.SSIDReference+.Name?" | sed '/^$/d')
+  $ get_hapd_config $itf wpa_key_mgmt
+  .*\bSAE\b.* (re)
+
+No more RSN Override in hostapd config files:
+
+  $ R "cat /tmp/wlan*_hapd.conf | grep rsn_override | wc -l"
+  0
+
+Silently Disable all VAPs:
+
+  $ R "usp-cli Device.WiFi.AccessPoint.*.Enable=0 > /dev/null"
+
+Wait VAP disabled completely:
+
+  $ sleep 15
+
+Restore default controller config:
+
+  $ prplmesh_start
+
+  $ R logger -t cram "$TESTFILE finished!"

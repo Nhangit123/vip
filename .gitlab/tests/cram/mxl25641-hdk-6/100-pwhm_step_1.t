@@ -1,0 +1,248 @@
+Create R alias:
+
+  $ alias R="${CRAM_REMOTE_COMMAND:-}"
+  $ . "${TESTDIR}/../scripts/wifi.sh"
+  $ alias C="${CRAM_REMOTE_COPY:-}"
+  $ C ${TESTDIR}/../scripts/target/usp-events.lua root@${TARGET_LAN_IP}:/tmp/usp-event.lua 2>/dev/null
+
+  $ R logger -t cram "Starting $TESTFILE"
+
+  $ check_wifi_defaults
+  $ testbed_set_wifi_defaults
+
+  $ prplmesh_stop
+
+USP events: Before enabling the first vap, let's start testing usp events.
+Check pwhm usp socket:
+
+  $ R "netstat -ap 2>/dev/null | grep 'LISTENING.*pwhm_usp.sock'"
+  .*LISTENING.*pwhm_usp.sock (re)
+
+Listen to AP1 event:
+
+  $ R "lua /tmp/usp-event.lua 'Device.WiFi.AccessPoint.1.Enable!' 'dm:object-changed' \"contains('parameters.Enable')\" > /tmp/pwhm_usp_events &"
+
+Test activation of access point 1:
+
+  $ R logger -t cram "Test AccessPoint 1 activation \"$(get_ssid_ref 1)\""
+
+  $ enable_ap 1
+  Device.WiFi.AccessPoint.1 enabled
+
+  $ check_ap_ref_ssid 1 Up
+  Device.WiFi.AccessPoint.1 SSID Reference is Up
+
+  $ sleep 5
+
+  $ get_ssid_status
+  Down
+  Down
+  Down
+  Down
+  Down
+  Down
+  Down
+  Down
+  Up
+
+
+USP Events: Check if the USP event is catched:
+
+  $ R "cat /tmp/pwhm_usp_events"
+  Event dm:object-changed
+  {
+      object = "Device.WiFi.AccessPoint.1.",
+      parameters = {
+          Enable = {
+              from = "",
+              to = "true"
+          }
+      },
+      path = "Device.WiFi.AccessPoint.1."
+  }
+
+Test activation of access point 2:
+
+  $ R logger -t cram "Test AccessPoint 2 activation \"$(get_ssid_ref 2)\""
+
+  $ enable_ap 2
+  Device.WiFi.AccessPoint.2 enabled
+
+  $ check_ap_ref_ssid 2 Up
+  Device.WiFi.AccessPoint.2 SSID Reference is Up
+
+  $ sleep 5
+
+  $ get_ssid_status
+  Down
+  Down
+  Down
+  Down
+  Down
+  Down
+  Down
+  Up
+  Up
+
+Test activation of access point 3:
+
+  $ R logger -t cram "Test AccessPoint 3 activation \"$(get_ssid_ref 3)\""
+
+  $ enable_ap 3
+  Device.WiFi.AccessPoint.3 enabled
+
+  $ check_ap_ref_ssid 3 Up
+  Device.WiFi.AccessPoint.3 SSID Reference is Up
+
+  $ sleep 5
+
+  $ get_ssid_status
+  Down
+  Down
+  Down
+  Down
+  Down
+  Down
+  Up
+  Up
+  Up
+
+Test activation of access point 4:
+
+  $ R logger -t cram "Test AccessPoint 4 activation \"$(get_ssid_ref 4)\""
+
+  $ enable_ap 4
+  Device.WiFi.AccessPoint.4 enabled
+
+  $ check_ap_ref_ssid 4 Up
+  Device.WiFi.AccessPoint.4 SSID Reference is Up
+
+  $ sleep 5
+
+  $ get_ssid_status
+  Down
+  Down
+  Down
+  Down
+  Down
+  Up
+  Up
+  Up
+  Up
+
+Test activation of access point 5:
+
+  $ R logger -t cram "Test AccessPoint 5 activation \"$(get_ssid_ref 5)\""
+
+  $ enable_ap 5
+  Device.WiFi.AccessPoint.5 enabled
+
+  $ check_ap_ref_ssid 5 Up
+  Device.WiFi.AccessPoint.5 SSID Reference is Up
+
+  $ sleep 5
+
+  $ get_ssid_status
+  Down
+  Down
+  Down
+  Down
+  Up
+  Up
+  Up
+  Up
+  Up
+
+Test activation of access point 6:
+
+  $ R logger -t cram "Test AccessPoint 6 activation \"$(get_ssid_ref 6)\""
+
+  $ enable_ap 6
+  Device.WiFi.AccessPoint.6 enabled
+
+  $ check_ap_ref_ssid 6 Up
+  Device.WiFi.AccessPoint.6 SSID Reference is Up
+
+  $ sleep 5
+
+  $ get_ssid_status
+  Down
+  Down
+  Down
+  Up
+  Up
+  Up
+  Up
+  Up
+  Up
+
+Test activation of access point 7:
+
+  $ R logger -t cram "Test AccessPoint 7 activation \"$(get_ssid_ref 7)\""
+
+  $ enable_ap 7
+  Device.WiFi.AccessPoint.7 enabled
+
+  $ check_ap_ref_ssid 7 Up
+  Device.WiFi.AccessPoint.7 SSID Reference is Up
+
+  $ sleep 5
+
+  $ get_ssid_status
+  Down
+  Down
+  Up
+  Up
+  Up
+  Up
+  Up
+  Up
+  Up
+
+Test activation of access point 8:
+
+  $ R logger -t cram "Test AccessPoint 8 activation \"$(get_ssid_ref 8)\""
+
+  $ enable_ap 8
+  Device.WiFi.AccessPoint.8 enabled
+
+  $ check_ap_ref_ssid 8 Up
+  Device.WiFi.AccessPoint.8 SSID Reference is Up
+
+  $ sleep 5
+
+  $ get_ssid_status
+  Down
+  Up
+  Up
+  Up
+  Up
+  Up
+  Up
+  Up
+  Up
+
+Test activation of access point 9:
+
+  $ R logger -t cram "Test AccessPoint 9 activation \"$(get_ssid_ref 9)\""
+
+  $ enable_ap 9
+  Device.WiFi.AccessPoint.9 enabled
+
+  $ check_ap_ref_ssid 9 Up
+  Device.WiFi.AccessPoint.9 SSID Reference is Up
+
+  $ sleep 5
+
+  $ get_ssid_status
+  Up
+  Up
+  Up
+  Up
+  Up
+  Up
+  Up
+  Up
+  Up
+
+  $ R logger -t cram "$TESTFILE finished!"

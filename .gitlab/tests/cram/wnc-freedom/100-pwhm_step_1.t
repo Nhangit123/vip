@@ -1,0 +1,470 @@
+Create R alias:
+
+  $ alias R="${CRAM_REMOTE_COMMAND:-}"
+  $ . "${TESTDIR}/../scripts/wifi.sh"
+  $ alias C="${CRAM_REMOTE_COPY:-}"
+  $ C ${TESTDIR}/../scripts/target/usp-events.lua root@${TARGET_LAN_IP}:/tmp/usp-event.lua 2>/dev/null
+
+  $ R logger -t cram "Starting $TESTFILE"
+
+  $ check_wifi_defaults
+  $ testbed_set_wifi_defaults
+
+  $ prplmesh_stop
+
+#####################################
+# Test activation of access point 1 #
+#####################################
+
+USP events: Before enabling the first vap, let's start testing usp events.
+Check pwhm usp socket:
+
+  $ R "netstat -ap 2>/dev/null | grep 'LISTENING.*pwhm_usp.sock'"
+  .*LISTENING.*pwhm_usp.sock (re)
+
+Listen to AP1 event:
+
+  $ R "lua /tmp/usp-event.lua 'Device.WiFi.AccessPoint.1.Enable!' 'dm:object-changed' \"contains('parameters.Enable')\" > /tmp/pwhm_usp_events &"
+
+  $ R logger -t cram "Test AccessPoint 1 activation \"$(get_ssid_ref 1)\""
+
+  $ enable_ap_sync 1 1
+  AccessPoint.\d+.Enable=1 (re)
+
+  $ wifi_dm "AccessPoint.*.Status?0"
+  Device.WiFi.AccessPoint.1.Status="Enabled"
+  Device.WiFi.AccessPoint.2.Status="Disabled"
+  Device.WiFi.AccessPoint.3.Status="Disabled"
+  Device.WiFi.AccessPoint.4.Status="Disabled"
+  Device.WiFi.AccessPoint.5.Status="Disabled"
+  Device.WiFi.AccessPoint.6.Status="Disabled"
+  Device.WiFi.AccessPoint.7.Status="Disabled"
+  Device.WiFi.AccessPoint.8.Status="Disabled"
+  Device.WiFi.AccessPoint.9.Status="Disabled"
+
+USP Events: Check if the USP event is catched:
+
+  $ R "cat /tmp/pwhm_usp_events"
+  Event dm:object-changed
+  {
+      object = "Device.WiFi.AccessPoint.1.",
+      parameters = {
+          Enable = {
+              from = "",
+              to = "true"
+          }
+      },
+      path = "Device.WiFi.AccessPoint.1."
+  }
+
+Check wpacltrl socket file:
+
+  $ ls_ap_hapd_socket 1
+  /var/run/hostapd/wlan[0-9.]+_link[0-9].* (re)
+
+  $ ls_hapd_sockets
+  wlan2.1
+  wlan2.1_link0
+
+Save hostap pid:
+
+  $ hostap_pid=$(R pgrep -f 'hostapd')
+  $ R logger -t cram "hostap PID : $hostap_pid"
+
+Save all the current ifindexes and verify inodes (FEAT-389):
+
+  $ ilist_old=
+  $ ilist_new=$(read_hostapd_inodes)
+  $ ifindexes=$(R "iw dev" | grep ifindex -B 1 | sed 's/^[[:space:]]*//')
+
+
+This is a new MLD so two new sockets should be created:
+
+  $ compare_list "$ilist_old" "$ilist_new"
+  A: .* /var/run/hostapd/wlan2.1 (re)
+  A: .* /var/run/hostapd/wlan2.1_link0 (re)
+
+  $ ilist_old=$ilist_new
+
+#####################################
+# Test activation of access point 2 #
+#####################################
+
+  $ R logger -t cram "Test AccessPoint 2 activation \"$(get_ssid_ref 2)\""
+
+  $ enable_ap_sync 2 1
+  AccessPoint.2.Enable=1
+
+  $ wifi_dm "AccessPoint.*.Status?0"
+  Device.WiFi.AccessPoint.1.Status="Enabled"
+  Device.WiFi.AccessPoint.2.Status="Enabled"
+  Device.WiFi.AccessPoint.3.Status="Disabled"
+  Device.WiFi.AccessPoint.4.Status="Disabled"
+  Device.WiFi.AccessPoint.5.Status="Disabled"
+  Device.WiFi.AccessPoint.6.Status="Disabled"
+  Device.WiFi.AccessPoint.7.Status="Disabled"
+  Device.WiFi.AccessPoint.8.Status="Disabled"
+  Device.WiFi.AccessPoint.9.Status="Disabled"
+
+Check wpacltrl socket file:
+
+  $ ls_ap_hapd_socket 2
+  /var/run/hostapd/wlan[0-9.]+_link[0-9] (re)
+
+  $ ls_hapd_sockets
+  wlan2.1
+  wlan2.1_link0
+  wlan2.2
+  wlan2.2_link0
+
+Check and save inodes (FEAT-389):
+
+  $ ilist_new=$(read_hostapd_inodes)
+
+This is a new MLD so two new sockets should be created:
+
+  $ compare_list "$ilist_old" "$ilist_new"
+  A: .* /var/run/hostapd/wlan2.2 (re)
+  A: .* /var/run/hostapd/wlan2.2_link0 (re)
+
+  $ ilist_old=$ilist_new
+
+#####################################
+# Test activation of access point 3 #
+#####################################
+
+  $ R logger -t cram "Test AccessPoint 3 activation \"$(get_ssid_ref 3)\""
+
+  $ enable_ap_sync 3 1
+  AccessPoint.3.Enable=1
+
+  $ wifi_dm "AccessPoint.*.Status?0"
+  Device.WiFi.AccessPoint.1.Status="Enabled"
+  Device.WiFi.AccessPoint.2.Status="Enabled"
+  Device.WiFi.AccessPoint.3.Status="Enabled"
+  Device.WiFi.AccessPoint.4.Status="Disabled"
+  Device.WiFi.AccessPoint.5.Status="Disabled"
+  Device.WiFi.AccessPoint.6.Status="Disabled"
+  Device.WiFi.AccessPoint.7.Status="Disabled"
+  Device.WiFi.AccessPoint.8.Status="Disabled"
+  Device.WiFi.AccessPoint.9.Status="Disabled"
+
+Check wpacltrl socket file:
+
+  $ ls_ap_hapd_socket 3
+  /var/run/hostapd/wlan[0-9.]+_link[0-9] (re)
+
+  $ ls_hapd_sockets
+  wlan2.1
+  wlan2.1_link0
+  wlan2.1_link1
+  wlan2.2
+  wlan2.2_link0
+
+Check and save inodes (FEAT-389):
+
+  $ ilist_new=$(read_hostapd_inodes)
+
+This is a new link so one new socket should be created:
+
+  $ compare_list "$ilist_old" "$ilist_new"
+  A: .* /var/run/hostapd/wlan2.1_link1 (re)
+
+  $ ilist_old=$ilist_new
+
+#####################################
+# Test activation of access point 4 #
+#####################################
+
+  $ R logger -t cram "Test AccessPoint 4 activation \"$(get_ssid_ref 4)\""
+
+  $ enable_ap_sync 4 1
+  AccessPoint.4.Enable=1
+
+  $ wifi_dm "AccessPoint.*.Status?0"
+  Device.WiFi.AccessPoint.1.Status="Enabled"
+  Device.WiFi.AccessPoint.2.Status="Enabled"
+  Device.WiFi.AccessPoint.3.Status="Enabled"
+  Device.WiFi.AccessPoint.4.Status="Enabled"
+  Device.WiFi.AccessPoint.5.Status="Disabled"
+  Device.WiFi.AccessPoint.6.Status="Disabled"
+  Device.WiFi.AccessPoint.7.Status="Disabled"
+  Device.WiFi.AccessPoint.8.Status="Disabled"
+  Device.WiFi.AccessPoint.9.Status="Disabled"
+
+Check wpacltrl socket file:
+
+  $ ls_ap_hapd_socket 4
+  /var/run/hostapd/wlan[0-9.]+_link[0-9] (re)
+
+  $ ls_hapd_sockets
+  wlan2.1
+  wlan2.1_link0
+  wlan2.1_link1
+  wlan2.2
+  wlan2.2_link0
+  wlan2.2_link1
+
+Check and save inodes (FEAT-389):
+
+  $ ilist_new=$(read_hostapd_inodes)
+
+This is a new link so one new socket should be created:
+
+  $ compare_list "$ilist_old" "$ilist_new"
+  A: .* /var/run/hostapd/wlan2.2_link1 (re)
+
+  $ ilist_old=$ilist_new
+
+#####################################
+# Test activation of access point 5 #
+#####################################
+
+  $ R logger -t cram "Test AccessPoint 5 activation \"$(get_ssid_ref 5)\""
+
+  $ enable_ap_sync 5 1
+  AccessPoint.5.Enable=1
+
+  $ wifi_dm "AccessPoint.*.Status?0"
+  Device.WiFi.AccessPoint.1.Status="Enabled"
+  Device.WiFi.AccessPoint.2.Status="Enabled"
+  Device.WiFi.AccessPoint.3.Status="Enabled"
+  Device.WiFi.AccessPoint.4.Status="Enabled"
+  Device.WiFi.AccessPoint.5.Status="Enabled"
+  Device.WiFi.AccessPoint.6.Status="Disabled"
+  Device.WiFi.AccessPoint.7.Status="Disabled"
+  Device.WiFi.AccessPoint.8.Status="Disabled"
+  Device.WiFi.AccessPoint.9.Status="Disabled"
+
+Check wpacltrl socket file:
+
+  $ ls_ap_hapd_socket 5
+  /var/run/hostapd/wlan[0-9.]+_link[0-9] (re)
+
+  $ ls_hapd_sockets
+  wlan2.1
+  wlan2.1_link0
+  wlan2.1_link1
+  wlan2.1_link2
+  wlan2.2
+  wlan2.2_link0
+  wlan2.2_link1
+
+Check and save inodes (FEAT-389):
+
+  $ ilist_new=$(read_hostapd_inodes)
+
+This is a new link so one new socket should be created:
+
+  $ compare_list "$ilist_old" "$ilist_new"
+  A: .* /var/run/hostapd/wlan2.1_link2 (re)
+
+  $ ilist_old=$ilist_new
+
+#####################################
+# Test activation of access point 6 #
+#####################################
+
+  $ R logger -t cram "Test AccessPoint 6 activation \"$(get_ssid_ref 6)\""
+
+  $ enable_ap_sync 6 1
+  AccessPoint.6.Enable=1
+
+  $ wifi_dm "AccessPoint.*.Status?0"
+  Device.WiFi.AccessPoint.1.Status="Enabled"
+  Device.WiFi.AccessPoint.2.Status="Enabled"
+  Device.WiFi.AccessPoint.3.Status="Enabled"
+  Device.WiFi.AccessPoint.4.Status="Enabled"
+  Device.WiFi.AccessPoint.5.Status="Enabled"
+  Device.WiFi.AccessPoint.6.Status="Enabled"
+  Device.WiFi.AccessPoint.7.Status="Disabled"
+  Device.WiFi.AccessPoint.8.Status="Disabled"
+  Device.WiFi.AccessPoint.9.Status="Disabled"
+
+Check wpacltrl socket file:
+
+  $ ls_ap_hapd_socket 6
+  /var/run/hostapd/wlan[0-9.]+_link[0-9] (re)
+
+  $ ls_hapd_sockets
+  wlan2.1
+  wlan2.1_link0
+  wlan2.1_link1
+  wlan2.1_link2
+  wlan2.2
+  wlan2.2_link0
+  wlan2.2_link1
+  wlan2.2_link2
+
+Check and save inodes (FEAT-389):
+
+  $ ilist_new=$(read_hostapd_inodes)
+
+This is a new link so one new socket should be created:
+
+  $ compare_list "$ilist_old" "$ilist_new"
+  A: .* /var/run/hostapd/wlan2.2_link2 (re)
+
+  $ ilist_old=$ilist_new
+
+#####################################
+# Test activation of access point 7 #
+#####################################
+
+  $ R logger -t cram "Test AccessPoint 7 activation \"$(get_ssid_ref 7)\""
+
+  $ enable_ap_sync 7 1
+  AccessPoint.7.Enable=1
+
+  $ wifi_dm "AccessPoint.*.Status?0"
+  Device.WiFi.AccessPoint.1.Status="Enabled"
+  Device.WiFi.AccessPoint.2.Status="Enabled"
+  Device.WiFi.AccessPoint.3.Status="Enabled"
+  Device.WiFi.AccessPoint.4.Status="Enabled"
+  Device.WiFi.AccessPoint.5.Status="Enabled"
+  Device.WiFi.AccessPoint.6.Status="Enabled"
+  Device.WiFi.AccessPoint.7.Status="Enabled"
+  Device.WiFi.AccessPoint.8.Status="Disabled"
+  Device.WiFi.AccessPoint.9.Status="Disabled"
+
+Check wpacltrl socket file:
+
+  $ ls_ap_hapd_socket 7
+  /var/run/hostapd/wlan[0-9.]+_link[0-9] (re)
+
+  $ ls_hapd_sockets
+  wlan2.1
+  wlan2.1_link0
+  wlan2.1_link1
+  wlan2.1_link2
+  wlan2.2
+  wlan2.2_link0
+  wlan2.2_link1
+  wlan2.2_link2
+  wlan2.3
+  wlan2.3_link0
+
+Check and save inodes (FEAT-389):
+
+  $ ilist_new=$(read_hostapd_inodes)
+
+This is a new MLD so two new sockets should be created:
+
+  $ compare_list "$ilist_old" "$ilist_new"
+  A: .* /var/run/hostapd/wlan2.3 (re)
+  A: .* /var/run/hostapd/wlan2.3_link0 (re)
+
+  $ ilist_old=$ilist_new
+
+#####################################
+# Test activation of access point 8 #
+#####################################
+
+  $ R logger -t cram "Test AccessPoint 8 activation \"$(get_ssid_ref 8)\""
+
+  $ enable_ap_sync 8 1
+  AccessPoint.8.Enable=1
+
+  $ wifi_dm "AccessPoint.*.Status?0"
+  Device.WiFi.AccessPoint.1.Status="Enabled"
+  Device.WiFi.AccessPoint.2.Status="Enabled"
+  Device.WiFi.AccessPoint.3.Status="Enabled"
+  Device.WiFi.AccessPoint.4.Status="Enabled"
+  Device.WiFi.AccessPoint.5.Status="Enabled"
+  Device.WiFi.AccessPoint.6.Status="Enabled"
+  Device.WiFi.AccessPoint.7.Status="Enabled"
+  Device.WiFi.AccessPoint.8.Status="Enabled"
+  Device.WiFi.AccessPoint.9.Status="Disabled"
+
+Check wpacltrl socket file:
+
+  $ ls_ap_hapd_socket 8
+  /var/run/hostapd/wlan[0-9.]+_link[0-9] (re)
+
+  $ ls_hapd_sockets
+  wlan2.1
+  wlan2.1_link0
+  wlan2.1_link1
+  wlan2.1_link2
+  wlan2.2
+  wlan2.2_link0
+  wlan2.2_link1
+  wlan2.2_link2
+  wlan2.3
+  wlan2.3_link0
+  wlan2.3_link1
+
+Check and save inodes (FEAT-389):
+
+  $ ilist_new=$(read_hostapd_inodes)
+
+This is a new link so one new socket should be created:
+
+  $ compare_list "$ilist_old" "$ilist_new"
+  A: .* /var/run/hostapd/wlan2.3_link1 (re)
+
+  $ ilist_old=$ilist_new
+
+#####################################
+# Test activation of access point 9 #
+#####################################
+
+  $ R logger -t cram "Test AccessPoint 9 activation \"$(get_ssid_ref 9)\""
+
+  $ enable_ap_sync 9 1
+  AccessPoint.9.Enable=1
+
+  $ wifi_dm "AccessPoint.*.Status?0"
+  Device.WiFi.AccessPoint.1.Status="Enabled"
+  Device.WiFi.AccessPoint.2.Status="Enabled"
+  Device.WiFi.AccessPoint.3.Status="Enabled"
+  Device.WiFi.AccessPoint.4.Status="Enabled"
+  Device.WiFi.AccessPoint.5.Status="Enabled"
+  Device.WiFi.AccessPoint.6.Status="Enabled"
+  Device.WiFi.AccessPoint.7.Status="Enabled"
+  Device.WiFi.AccessPoint.8.Status="Enabled"
+  Device.WiFi.AccessPoint.9.Status="Enabled"
+
+Check wpacltrl socket file:
+
+  $ ls_ap_hapd_socket 9
+  /var/run/hostapd/wlan[0-9.]+_link[0-9] (re)
+
+  $ ls_hapd_sockets
+  wlan2.1
+  wlan2.1_link0
+  wlan2.1_link1
+  wlan2.1_link2
+  wlan2.2
+  wlan2.2_link0
+  wlan2.2_link1
+  wlan2.2_link2
+  wlan2.3
+  wlan2.3_link0
+  wlan2.3_link1
+  wlan2.3_link2
+
+Check and save inodes (FEAT-389):
+
+  $ ilist_new=$(read_hostapd_inodes)
+
+This is a new link so one new socket should be created:
+
+  $ compare_list "$ilist_old" "$ilist_new"
+  A: .* /var/run/hostapd/wlan2.3_link2 (re)
+
+  $ ilist_old=$ilist_new
+
+Check is any ifindex changed. grep only removed (ie changed) ifindexes (FEAT-389):
+
+  $ ifidx_cur=$(R "iw dev" | grep ifindex -B 1 | sed 's/^[[:space:]]*//')
+  $ compare_list "$ifindexes" "$ifidx_cur" | grep 'R:' || true
+
+  $ sleep 5
+
+Check if hostap pid has changed or not:
+
+  $ if [ "$(R pgrep -f 'hostapd')" = "$hostap_pid" ]; then echo "true"; else echo "hostap restarted during the test !"; fi
+  true
+
+  $ R logger -t cram "$TESTFILE finished!"

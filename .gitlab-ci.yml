@@ -1,0 +1,22 @@
+stages:
+  - run
+
+variables:
+  CRAM_REMOTE_COPY: scp -O -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+
+cram prplos:
+  stage: run
+  image: ubuntu:22.04
+  when: manual
+  before_script:
+    - apt-get update
+    - apt-get install --yes --no-install-recommends openssh-client python3-cram
+    - test -n "${DUT_HOST:?Set DUT_HOST in the GitLab CI variables}"
+    - test -n "${SSH_USER:?Set SSH_USER in the GitLab CI variables}"
+    - test -n "${DUT_BOARD:?Set DUT_BOARD to the prplOS board under test}"
+  script:
+    - export CRAM_REMOTE_COMMAND="ssh -n -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${SSH_USER}@${DUT_HOST}"
+    - export CRAM_TEST_SUITE=".gitlab/tests/cram/generic .gitlab/tests/cram/${DUT_BOARD}"
+    - export CRAM_TEST_SUITE_POST=".gitlab/tests/cram/post/generic"
+    - python3 -m cram --verbose $CRAM_TEST_SUITE
+    - python3 -m cram --verbose $CRAM_TEST_SUITE_POST

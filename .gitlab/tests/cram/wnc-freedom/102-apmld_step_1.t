@@ -1,0 +1,547 @@
+Create R alias:
+
+  $ alias R="${CRAM_REMOTE_COMMAND:-}"
+  $ . "${TESTDIR}/../scripts/wifi.sh"
+
+  $ R logger -t cram "Starting $TESTFILE"
+
+  $ check_wifi_defaults
+  $ testbed_set_wifi_defaults
+
+  $ prplmesh_stop
+
+Check APMLD default configuration:
+
+  $ R logger -t cram "Check default configuration"
+  $ wifi_dm "APMLDMaxLinks?"
+  Device.WiFi.APMLDMaxLinks=\d+ (re)
+
+  $ R logger -t cram "Check default configuration"
+  $ wifi_dm "MaxNumMLDs?"
+  Device.WiFi.MaxNumMLDs=\d+ (re)
+
+  $ wifi_dm "APMLD.?" | LC_ALL=C sort
+  Device.WiFi.APMLD.1.APMLDConfig.EMLMREnabled=0
+  Device.WiFi.APMLD.1.APMLDConfig.EMLSREnabled=1
+  Device.WiFi.APMLD.1.APMLDConfig.NSTREnabled=1
+  Device.WiFi.APMLD.1.APMLDConfig.STREnabled=1
+  Device.WiFi.APMLD.1.AffiliatedAPNumberOfEntries=0
+  Device.WiFi.APMLD.1.MLDID=0
+  Device.WiFi.APMLD.1.MLDMACAddress=""
+  Device.WiFi.APMLD.1.TIDLinkMap.1.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.1.Direction="Up"
+  Device.WiFi.APMLD.1.TIDLinkMap.1.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.1.TID=0
+  Device.WiFi.APMLD.1.TIDLinkMap.10.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.10.Direction="Down"
+  Device.WiFi.APMLD.1.TIDLinkMap.10.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.10.TID=1
+  Device.WiFi.APMLD.1.TIDLinkMap.11.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.11.Direction="Down"
+  Device.WiFi.APMLD.1.TIDLinkMap.11.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.11.TID=2
+  Device.WiFi.APMLD.1.TIDLinkMap.12.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.12.Direction="Down"
+  Device.WiFi.APMLD.1.TIDLinkMap.12.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.12.TID=3
+  Device.WiFi.APMLD.1.TIDLinkMap.13.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.13.Direction="Down"
+  Device.WiFi.APMLD.1.TIDLinkMap.13.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.13.TID=4
+  Device.WiFi.APMLD.1.TIDLinkMap.14.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.14.Direction="Down"
+  Device.WiFi.APMLD.1.TIDLinkMap.14.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.14.TID=5
+  Device.WiFi.APMLD.1.TIDLinkMap.15.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.15.Direction="Down"
+  Device.WiFi.APMLD.1.TIDLinkMap.15.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.15.TID=6
+  Device.WiFi.APMLD.1.TIDLinkMap.16.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.16.Direction="Down"
+  Device.WiFi.APMLD.1.TIDLinkMap.16.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.16.TID=7
+  Device.WiFi.APMLD.1.TIDLinkMap.2.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.2.Direction="Up"
+  Device.WiFi.APMLD.1.TIDLinkMap.2.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.2.TID=1
+  Device.WiFi.APMLD.1.TIDLinkMap.3.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.3.Direction="Up"
+  Device.WiFi.APMLD.1.TIDLinkMap.3.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.3.TID=2
+  Device.WiFi.APMLD.1.TIDLinkMap.4.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.4.Direction="Up"
+  Device.WiFi.APMLD.1.TIDLinkMap.4.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.4.TID=3
+  Device.WiFi.APMLD.1.TIDLinkMap.5.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.5.Direction="Up"
+  Device.WiFi.APMLD.1.TIDLinkMap.5.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.5.TID=4
+  Device.WiFi.APMLD.1.TIDLinkMap.6.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.6.Direction="Up"
+  Device.WiFi.APMLD.1.TIDLinkMap.6.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.6.TID=5
+  Device.WiFi.APMLD.1.TIDLinkMap.7.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.7.Direction="Up"
+  Device.WiFi.APMLD.1.TIDLinkMap.7.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.7.TID=6
+  Device.WiFi.APMLD.1.TIDLinkMap.8.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.8.Direction="Up"
+  Device.WiFi.APMLD.1.TIDLinkMap.8.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.8.TID=7
+  Device.WiFi.APMLD.1.TIDLinkMap.9.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.1.TIDLinkMap.9.Direction="Down"
+  Device.WiFi.APMLD.1.TIDLinkMap.9.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMap.9.TID=0
+  Device.WiFi.APMLD.1.TIDLinkMapConfig.AdvertisedExpectedDuration=300
+  Device.WiFi.APMLD.1.TIDLinkMapConfig.AdvertisedLinkMapFrequencyBands=""
+  Device.WiFi.APMLD.1.TIDLinkMapConfig.AdvertisedMapSwitchTime=100
+  Device.WiFi.APMLD.1.TIDLinkMapConfig.Mode="Advertised"
+  Device.WiFi.APMLD.2.APMLDConfig.EMLMREnabled=0
+  Device.WiFi.APMLD.2.APMLDConfig.EMLSREnabled=1
+  Device.WiFi.APMLD.2.APMLDConfig.NSTREnabled=1
+  Device.WiFi.APMLD.2.APMLDConfig.STREnabled=1
+  Device.WiFi.APMLD.2.AffiliatedAPNumberOfEntries=0
+  Device.WiFi.APMLD.2.MLDID=1
+  Device.WiFi.APMLD.2.MLDMACAddress=""
+  Device.WiFi.APMLD.2.TIDLinkMap.1.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.1.Direction="Up"
+  Device.WiFi.APMLD.2.TIDLinkMap.1.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.1.TID=0
+  Device.WiFi.APMLD.2.TIDLinkMap.10.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.10.Direction="Down"
+  Device.WiFi.APMLD.2.TIDLinkMap.10.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.10.TID=1
+  Device.WiFi.APMLD.2.TIDLinkMap.11.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.11.Direction="Down"
+  Device.WiFi.APMLD.2.TIDLinkMap.11.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.11.TID=2
+  Device.WiFi.APMLD.2.TIDLinkMap.12.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.12.Direction="Down"
+  Device.WiFi.APMLD.2.TIDLinkMap.12.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.12.TID=3
+  Device.WiFi.APMLD.2.TIDLinkMap.13.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.13.Direction="Down"
+  Device.WiFi.APMLD.2.TIDLinkMap.13.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.13.TID=4
+  Device.WiFi.APMLD.2.TIDLinkMap.14.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.14.Direction="Down"
+  Device.WiFi.APMLD.2.TIDLinkMap.14.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.14.TID=5
+  Device.WiFi.APMLD.2.TIDLinkMap.15.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.15.Direction="Down"
+  Device.WiFi.APMLD.2.TIDLinkMap.15.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.15.TID=6
+  Device.WiFi.APMLD.2.TIDLinkMap.16.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.16.Direction="Down"
+  Device.WiFi.APMLD.2.TIDLinkMap.16.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.16.TID=7
+  Device.WiFi.APMLD.2.TIDLinkMap.2.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.2.Direction="Up"
+  Device.WiFi.APMLD.2.TIDLinkMap.2.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.2.TID=1
+  Device.WiFi.APMLD.2.TIDLinkMap.3.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.3.Direction="Up"
+  Device.WiFi.APMLD.2.TIDLinkMap.3.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.3.TID=2
+  Device.WiFi.APMLD.2.TIDLinkMap.4.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.4.Direction="Up"
+  Device.WiFi.APMLD.2.TIDLinkMap.4.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.4.TID=3
+  Device.WiFi.APMLD.2.TIDLinkMap.5.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.5.Direction="Up"
+  Device.WiFi.APMLD.2.TIDLinkMap.5.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.5.TID=4
+  Device.WiFi.APMLD.2.TIDLinkMap.6.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.6.Direction="Up"
+  Device.WiFi.APMLD.2.TIDLinkMap.6.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.6.TID=5
+  Device.WiFi.APMLD.2.TIDLinkMap.7.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.7.Direction="Up"
+  Device.WiFi.APMLD.2.TIDLinkMap.7.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.7.TID=6
+  Device.WiFi.APMLD.2.TIDLinkMap.8.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.8.Direction="Up"
+  Device.WiFi.APMLD.2.TIDLinkMap.8.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.8.TID=7
+  Device.WiFi.APMLD.2.TIDLinkMap.9.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.2.TIDLinkMap.9.Direction="Down"
+  Device.WiFi.APMLD.2.TIDLinkMap.9.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMap.9.TID=0
+  Device.WiFi.APMLD.2.TIDLinkMapConfig.AdvertisedExpectedDuration=300
+  Device.WiFi.APMLD.2.TIDLinkMapConfig.AdvertisedLinkMapFrequencyBands=""
+  Device.WiFi.APMLD.2.TIDLinkMapConfig.AdvertisedMapSwitchTime=100
+  Device.WiFi.APMLD.2.TIDLinkMapConfig.Mode="Advertised"
+  Device.WiFi.APMLD.3.APMLDConfig.EMLMREnabled=0
+  Device.WiFi.APMLD.3.APMLDConfig.EMLSREnabled=1
+  Device.WiFi.APMLD.3.APMLDConfig.NSTREnabled=1
+  Device.WiFi.APMLD.3.APMLDConfig.STREnabled=1
+  Device.WiFi.APMLD.3.AffiliatedAPNumberOfEntries=0
+  Device.WiFi.APMLD.3.MLDID=2
+  Device.WiFi.APMLD.3.MLDMACAddress=""
+  Device.WiFi.APMLD.3.TIDLinkMap.1.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.1.Direction="Up"
+  Device.WiFi.APMLD.3.TIDLinkMap.1.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.1.TID=0
+  Device.WiFi.APMLD.3.TIDLinkMap.10.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.10.Direction="Down"
+  Device.WiFi.APMLD.3.TIDLinkMap.10.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.10.TID=1
+  Device.WiFi.APMLD.3.TIDLinkMap.11.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.11.Direction="Down"
+  Device.WiFi.APMLD.3.TIDLinkMap.11.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.11.TID=2
+  Device.WiFi.APMLD.3.TIDLinkMap.12.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.12.Direction="Down"
+  Device.WiFi.APMLD.3.TIDLinkMap.12.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.12.TID=3
+  Device.WiFi.APMLD.3.TIDLinkMap.13.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.13.Direction="Down"
+  Device.WiFi.APMLD.3.TIDLinkMap.13.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.13.TID=4
+  Device.WiFi.APMLD.3.TIDLinkMap.14.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.14.Direction="Down"
+  Device.WiFi.APMLD.3.TIDLinkMap.14.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.14.TID=5
+  Device.WiFi.APMLD.3.TIDLinkMap.15.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.15.Direction="Down"
+  Device.WiFi.APMLD.3.TIDLinkMap.15.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.15.TID=6
+  Device.WiFi.APMLD.3.TIDLinkMap.16.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.16.Direction="Down"
+  Device.WiFi.APMLD.3.TIDLinkMap.16.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.16.TID=7
+  Device.WiFi.APMLD.3.TIDLinkMap.2.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.2.Direction="Up"
+  Device.WiFi.APMLD.3.TIDLinkMap.2.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.2.TID=1
+  Device.WiFi.APMLD.3.TIDLinkMap.3.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.3.Direction="Up"
+  Device.WiFi.APMLD.3.TIDLinkMap.3.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.3.TID=2
+  Device.WiFi.APMLD.3.TIDLinkMap.4.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.4.Direction="Up"
+  Device.WiFi.APMLD.3.TIDLinkMap.4.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.4.TID=3
+  Device.WiFi.APMLD.3.TIDLinkMap.5.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.5.Direction="Up"
+  Device.WiFi.APMLD.3.TIDLinkMap.5.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.5.TID=4
+  Device.WiFi.APMLD.3.TIDLinkMap.6.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.6.Direction="Up"
+  Device.WiFi.APMLD.3.TIDLinkMap.6.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.6.TID=5
+  Device.WiFi.APMLD.3.TIDLinkMap.7.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.7.Direction="Up"
+  Device.WiFi.APMLD.3.TIDLinkMap.7.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.7.TID=6
+  Device.WiFi.APMLD.3.TIDLinkMap.8.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.8.Direction="Up"
+  Device.WiFi.APMLD.3.TIDLinkMap.8.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.8.TID=7
+  Device.WiFi.APMLD.3.TIDLinkMap.9.BSSID="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" (re)
+  Device.WiFi.APMLD.3.TIDLinkMap.9.Direction="Down"
+  Device.WiFi.APMLD.3.TIDLinkMap.9.LinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMap.9.TID=0
+  Device.WiFi.APMLD.3.TIDLinkMapConfig.AdvertisedExpectedDuration=300
+  Device.WiFi.APMLD.3.TIDLinkMapConfig.AdvertisedLinkMapFrequencyBands=""
+  Device.WiFi.APMLD.3.TIDLinkMapConfig.AdvertisedMapSwitchTime=100
+  Device.WiFi.APMLD.3.TIDLinkMapConfig.Mode="Advertised"
+
+Configure radio and enable all AccessPoints:
+
+  $ R logger -t cram "Enable all vaps"
+  $ wifi_dm "AccessPoint.*.Enable=1"
+  Device.WiFi.AccessPoint.1.Enable=1
+  Device.WiFi.AccessPoint.2.Enable=1
+  Device.WiFi.AccessPoint.3.Enable=1
+  Device.WiFi.AccessPoint.4.Enable=1
+  Device.WiFi.AccessPoint.5.Enable=1
+  Device.WiFi.AccessPoint.6.Enable=1
+  Device.WiFi.AccessPoint.7.Enable=1
+  Device.WiFi.AccessPoint.8.Enable=1
+  Device.WiFi.AccessPoint.9.Enable=1
+
+  $ sleep 10
+
+Check AccessPoints status:
+
+  $ wifi_dm "AccessPoint.*.Status?0"
+  Device.WiFi.AccessPoint.1.Status="Enabled"
+  Device.WiFi.AccessPoint.2.Status="Enabled"
+  Device.WiFi.AccessPoint.3.Status="Enabled"
+  Device.WiFi.AccessPoint.4.Status="Enabled"
+  Device.WiFi.AccessPoint.5.Status="Enabled"
+  Device.WiFi.AccessPoint.6.Status="Enabled"
+  Device.WiFi.AccessPoint.7.Status="Enabled"
+  Device.WiFi.AccessPoint.8.Status="Enabled"
+  Device.WiFi.AccessPoint.9.Status="Enabled"
+
+Force 5GHz channel to 36 as hostapd may internally change the primary channel after enabling the radio (PPW-2397):
+
+  $ R "ba-cli -j -l Device.WiFi.Radio.2.Channel=36 | sed '/^$/d'"
+  [{"Device.WiFi.Radio.2.":{"Channel":36}}]
+
+  $ sleep 5
+
+Save hostap pid:
+
+  $ hostap_pid=$(R pgrep -f 'hostapd')
+  $ R logger -t cram "hostap PID : $hostap_pid"
+
+Read private and guest MLDUnit:
+
+  $ private_mldunit=$(get_private_mldunit)
+  $ guest_mldunit=$(get_guest_mldunit)
+  $ test_mldunit=12
+
+Check private APMLD number of links:
+
+  $ iw_affliated_link_info_from_mldid ${private_mldunit}
+  addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  channel 1 .* (re)
+  channel 36 .* (re)
+  channel 37 .* (re)
+  link 0
+  link 1
+  link 2
+
+Check APMLD 2 number (guest vaps) of links:
+
+  $ iw_affliated_link_info_from_mldid ${guest_mldunit}
+  addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  channel 1 .* (re)
+  channel 36 .* (re)
+  channel 37 .* (re)
+  link 0
+  link 1
+  link 2
+
+Read all link IDs (3 links per MLD):
+(LinkID values do not matter, uniqueness will be checked implicitly later)
+
+  $ wifi_dm "APMLD.*.AffiliatedAP.*.LinkID?"
+  Device.WiFi.APMLD.1.AffiliatedAP.1.LinkID=\d+ (re)
+  Device.WiFi.APMLD.1.AffiliatedAP.2.LinkID=\d+ (re)
+  Device.WiFi.APMLD.1.AffiliatedAP.3.LinkID=\d+ (re)
+  Device.WiFi.APMLD.2.AffiliatedAP.1.LinkID=\d+ (re)
+  Device.WiFi.APMLD.2.AffiliatedAP.2.LinkID=\d+ (re)
+  Device.WiFi.APMLD.2.AffiliatedAP.3.LinkID=\d+ (re)
+  Device.WiFi.APMLD.3.AffiliatedAP.1.LinkID=\d+ (re)
+  Device.WiFi.APMLD.3.AffiliatedAP.2.LinkID=\d+ (re)
+  Device.WiFi.APMLD.3.AffiliatedAP.3.LinkID=\d+ (re)
+
+Read AffiliatedAP MAC addresses from iw (private):
+
+  $ iw_affilated_mac_list=$(iw_affilated_mac_list_from_mldid ${private_mldunit})
+  $ echo "$iw_affilated_mac_list"
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+
+Read AffiliatedAP MAC addresses from pwhm (private):
+
+  $ dm_affilated_mac_list=$(dm_affilated_mac_list_from_mldid ${private_mldunit})
+  $ echo "$dm_affilated_mac_list"
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+
+Cross check Affilated MACs addresses (private):
+
+  $ merged_list=$(printf "%s\n%s\n" "$dm_affilated_mac_list" "$iw_affilated_mac_list" | tr '[:upper:]' '[:lower:]' | sort -u)
+
+  $ echo "$merged_list" | uniq
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+
+Read AffiliatedAP MAC addresses from iw (guest):
+
+  $ iw_affilated_mac_list=$(iw_affilated_mac_list_from_mldid ${guest_mldunit})
+  $ echo "$iw_affilated_mac_list"
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+
+Read AffiliatedAP MAC addresses from pwhm (guest):
+
+  $ dm_affilated_mac_list=$(dm_affilated_mac_list_from_mldid ${guest_mldunit})
+  $ echo "$dm_affilated_mac_list"
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+
+Cross check Affilated MACs addresses (guest):
+
+  $ merged_list=$(printf "%s\n%s\n" "$dm_affilated_mac_list" "$iw_affilated_mac_list" | tr '[:upper:]' '[:lower:]' | sort -u)
+
+  $ echo "$merged_list" | uniq
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+
+Check wpacltrl socket file: default status
+
+  $ ls_hapd_sockets
+  wlan2.1
+  wlan2.1_link0
+  wlan2.1_link1
+  wlan2.1_link2
+  wlan2.2
+  wlan2.2_link0
+  wlan2.2_link1
+  wlan2.2_link2
+  wlan2.3
+  wlan2.3_link0
+  wlan2.3_link1
+  wlan2.3_link2
+
+check ttlm_enable in hostapd configuration files:
+
+  $ R "cat /tmp/wlan*_hapd.conf" | grep ttlm_enable= | sort
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+
+#########################################
+#  Unset MLDUnit of one priv SSID       #
+#########################################
+
+Remove AP1 (private) from its APMLD:
+
+  $ R logger -t cram "Remove AP1 from its APMLD"
+  $ wifi_dm "AccessPoint.1.SSIDReference+.MLDUnit=-1"
+  Device.WiFi.SSID.\d+.MLDUnit=-1 (re)
+
+  $ sleep 10
+
+Check private APMLD number of links:
+
+  $ iw_affliated_link_info_from_mldid ${private_mldunit}
+  addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  channel 36 .* (re)
+  channel 37 .* (re)
+  link 0
+  link 1
+
+Read AffiliatedAP MAC addresses:
+
+  $ iw_affilated_mac_list_from_mldid ${private_mldunit}
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  link \d+ addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+
+Check link id of private MLD:
+
+  $ wifi_dm "APMLD.[ MLDID == ${private_mldunit} ].AffiliatedAP.*.LinkID?"
+  Device.WiFi.APMLD.1.AffiliatedAP.1.LinkID=0
+  Device.WiFi.APMLD.1.AffiliatedAP.2.LinkID=1
+
+Check wpacltrl socket file: update of main link interface
+AP1 (wlan2.1) was the primary link, private MLD should have now another main
+link interface with 2 links and AP1 interface should appear with no link (ie MLDUnit=-1)
+
+  $ ls_hapd_sockets
+  wlan1.1
+  wlan1.1_link0
+  wlan1.1_link1
+  wlan2.1
+  wlan2.2
+  wlan2.2_link0
+  wlan2.2_link1
+  wlan2.2_link2
+  wlan2.3
+  wlan2.3_link0
+  wlan2.3_link1
+  wlan2.3_link2
+
+Check hostapd configration file :
+
+  $ itf=$(wifi_dm "AccessPoint.1.SSIDReference+.Name?" | cut -d'"' -f2)
+  $ get_hapd_config $itf ttlm_enable
+  0
+
+  $ R "cat /tmp/wlan*_hapd.conf" | grep ttlm_enable= | sort
+  ttlm_enable=0
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+
+#########################################
+# Restore MLDUnit                       #
+#########################################
+
+Move back AP1 to its previous APMLD:
+
+  $ R logger -t cram "Move back AP1 to its previous APMLD"
+  $ wifi_dm "AccessPoint.1.SSIDReference+.MLDUnit=${private_mldunit}"
+  Device.WiFi.SSID.\d+.MLDUnit=0 (re)
+
+  $ sleep 10
+
+Check private APMLD number of links:
+
+  $ iw_affliated_link_info_from_mldid ${private_mldunit}
+  addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  addr ([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2} (re)
+  channel 1 .* (re)
+  channel 36 .* (re)
+  channel 37 .* (re)
+  link 0
+  link 1
+  link 2
+
+Check wpacltrl socket file: AP1 (wlan2.1) turns back to previous MLD,
+main link interface (wlan1.1) shouldn't change. private MLD should
+have again 3 links
+
+  $ ls_hapd_sockets
+  wlan1.1
+  wlan1.1_link0
+  wlan1.1_link1
+  wlan1.1_link2
+  wlan2.2
+  wlan2.2_link0
+  wlan2.2_link1
+  wlan2.2_link2
+  wlan2.3
+  wlan2.3_link0
+  wlan2.3_link1
+  wlan2.3_link2
+
+Check hostapd configration file :
+
+  $ R "cat /tmp/wlan*_hapd.conf" | grep ttlm_enable= | sort
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+  ttlm_enable=1
+
+Before leaving the test, check if hostap pid has changed or not:
+
+  $ if [ "$(R pgrep -f 'hostapd')" = "$hostap_pid" ]; then echo "true"; else echo "hostap restarted during the test !"; fi
+  true
+
+  $ R logger -t cram "$TESTFILE finished!"
+
